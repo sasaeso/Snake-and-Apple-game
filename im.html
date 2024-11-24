@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snake and Apple Game</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>🐍 Snake & Apple Game 🍎</h1>
+  </header>
+  <main>
+    <div class="game-container">
+      <canvas id="gameCanvas" width="400" height="400"></canvas>
+      <div class="score-container">
+        <p id="score">Score: 0</p>
+      </div>
+    </div>
+    <div class="instructions">
+      <p>Use the arrow keys to move the snake. Eat the apples, but don't eat yourself!</p>
+    </div>
+  </main>
+  <footer>
+    <p>Snake Game | Designed by Mostafa Ashraf</p>
+  </footer>
+  <script src="script.js"></script>
+  <style>
+    /* General Reset */
+body {
+  margin: 0;
+  font-family: 'Arial', sans-serif;
+  background: linear-gradient(135deg, #6dd5fa, #2980b9);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+header h1 {
+  font-size: 2.5rem;
+  margin: 10px 0;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.game-container {
+  position: relative;
+  display: inline-block;
+  border: 8px solid #333;
+  border-radius: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  background: #222;
+}
+
+canvas {
+  display: block;
+  background: #1e1e1e; /* Dark gray for contrast */
+  border-radius: 10px;
+}
+
+.score-container {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #ffcc00;
+}
+
+.instructions {
+  margin-top: 20px;
+  font-size: 1rem;
+  text-align: center;
+  line-height: 1.5;
+  max-width: 400px;
+}
+
+footer {
+  margin-top: 20px;
+  font-size: 0.9rem;
+  color: #ddd;
+}
+
+footer p {
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+  </style>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Game settings
+const boxSize = 20;
+let snake = [{ x: 10 * boxSize, y: 10 * boxSize }];
+let direction = 'RIGHT';
+let nextDirection = 'RIGHT';
+let apple = { x: randomPosition(), y: randomPosition() };
+let walls = generateStraightWalls(); // Generate dynamic walls
+let score = 0;
+let collisionEffect = null; // Track collision effect
+let collisionAnimationFrame = 0; // Frame count for animation
+
+// Listen for keyboard input
+document.addEventListener('keydown', changeDirection);
+
+function changeDirection(event) {
+  const key = event.keyCode;
+  if (key === 37) nextDirection = 'LEFT';
+  else if (key === 38) nextDirection = 'UP';
+  else if (key === 39) nextDirection = 'RIGHT';
+  else if (key === 40) nextDirection = 'DOWN';
+}
+
+function randomPosition() {
+  return Math.floor(Math.random() * canvas.width / boxSize) * boxSize;
+}
+
+function generateStraightWalls() {
+  const wallChains = [];
+
+  // Wall 1 (random horizontal)
+  const startX1 = randomPosition();
+  const startY1 = randomPosition();
+  for (let i = 0; i < 8; i++) {
+    wallChains.push({ x: startX1 + i * boxSize, y: startY1 });
+  }
+
+  // Wall 2 (random horizontal)
+  const startX2 = randomPosition();
+  const startY2 = randomPosition();
+  for (let i = 0; i < 8; i++) {
+    wallChains.push({ x: startX2 + i * boxSize, y: startY2 });
+  }
+
+  // Wall 3 (random vertical)
+  const startX3 = randomPosition();
+  const startY3 = randomPosition();
+  for (let i = 0; i < 8; i++) {
+    wallChains.push({ x: startX3, y: startY3 + i * boxSize });
+  }
+
+  // Wall 4 (random vertical)
+  const startX4 = randomPosition();
+  const startY4 = randomPosition();
+  for (let i = 0; i < 8; i++) {
+    wallChains.push({ x: startX4, y: startY4 + i * boxSize });
+  }
+
+  return wallChains.filter(
+    wall => wall.x >= 0 && wall.x < canvas.width && wall.y >= 0 && wall.y < canvas.height
+  ); // Ensure walls are within bounds
+}
+
+function drawWalls() {
+  ctx.fillStyle = 'gray'; // Wall color
+  walls.forEach(wall => {
+    ctx.fillRect(wall.x, wall.y, boxSize, boxSize);
+    ctx.strokeStyle = 'black';
+    ctx.strokeRect(wall.x, wall.y, boxSize, boxSize);
+  });
+
+  // Draw collision effect on the wall
+  if (collisionEffect) {
+    ctx.fillStyle = 'red';
+    ctx.globalAlpha = 0.6; // Add transparency for the effect
+    ctx.fillRect(collisionEffect.x, collisionEffect.y, boxSize, boxSize);
+    ctx.globalAlpha = 1.0; // Reset transparency
+  }
+}
+
+function drawApple() {
+  const centerX = apple.x + boxSize / 2;
+  const centerY = apple.y + boxSize / 2;
+
+  // Apple body
+  const gradient = ctx.createRadialGradient(centerX, centerY, boxSize / 8, centerX, centerY, boxSize / 2);
+  gradient.addColorStop(0, '#ff4d4d'); // Bright red
+  gradient.addColorStop(1, '#b30000'); // Dark red
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, boxSize / 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Apple stem
+  ctx.strokeStyle = '#8B4513'; // Brown stem color
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(centerX, centerY - boxSize / 2);
+  ctx.lineTo(centerX, centerY - boxSize / 1.5);
+  ctx.stroke();
+
+  // Apple leaf
+  ctx.fillStyle = 'green';
+  ctx.beginPath();
+  ctx.arc(centerX + 4, centerY - boxSize / 1.5, boxSize / 8, 0, Math.PI * 2);
+  ctx.fill();
+}
+function placeApple() {
+  let apple;
+  do {
+    apple = { x: randomPosition(), y: randomPosition() };
+  } while (walls.some(wall => wall.x === apple.x && wall.y === apple.y));
+  return apple;
+}
+
+function moveSnake() {
+  direction = nextDirection;
+  const head = { ...snake[0] };
+
+  // Move the head in the current direction
+  if (direction === 'LEFT') head.x -= boxSize;
+  if (direction === 'UP') head.y -= boxSize;
+  if (direction === 'RIGHT') head.x += boxSize;
+  if (direction === 'DOWN') head.y += boxSize;
+
+  // Wrap around the edges
+  if (head.x < 0) head.x = canvas.width - boxSize;
+  if (head.x >= canvas.width) head.x = 0;
+  if (head.y < 0) head.y = canvas.height - boxSize;
+  if (head.y >= canvas.height) head.y = 0;
+
+  // Check collision with apple
+  if (head.x === apple.x && head.y === apple.y) {
+    score++;
+    document.getElementById('score').textContent = `Score: ${score}`;
+    apple = { x: randomPosition(), y: randomPosition() };
+  } else {
+    snake.pop();
+  }
+
+  snake.unshift(head);
+}
+
+function checkCollision() {
+  const head = snake[0];
+
+  // Check collision with walls
+  walls.forEach(wall => {
+    if (head.x === wall.x && head.y === wall.y) {
+      collisionEffect = wall; // Set collision effect
+      startCollisionAnimation(); // Trigger animation
+      setTimeout(() => gameOver('You hit a wall!'), 300); // Delay game-over message
+    }
+  });
+
+  // Check collision with itself
+  for (let i = 1; i < snake.length; i++) {
+    if (head.x === snake[i].x && head.y === snake[i].y) {
+      gameOver('You ate yourself!');
+    }
+  }
+}
+
+function startCollisionAnimation() {
+  collisionAnimationFrame = 0;
+  animateCollision();
+}
+
+function animateCollision() {
+  if (collisionAnimationFrame < 10) {
+    // Shake canvas effect
+    const shakeOffset = collisionAnimationFrame % 2 === 0 ? 5 : -5;
+    canvas.style.transform = `translate(${shakeOffset}px, ${shakeOffset}px)`;
+
+    collisionAnimationFrame++;
+    requestAnimationFrame(animateCollision);
+  } else {
+    canvas.style.transform = 'translate(0, 0)'; // Reset canvas position
+  }
+}
+
+function gameOver(message) {
+  alert(`Game Over! ${message} Your score: ${score}`);
+  resetGame();
+}
+
+function resetGame() {
+  snake = [{ x: 10 * boxSize, y: 10 * boxSize }];
+  direction = 'RIGHT';
+  nextDirection = 'RIGHT';
+  apple = { x: randomPosition(), y: randomPosition() };
+  walls = generateStraightWalls(); // Reset walls dynamically
+  collisionEffect = null; // Clear collision effect
+  score = 0;
+  document.getElementById('score').textContent = `Score: ${score}`;
+}
+
+function drawSnake() {
+  for (let i = 0; i < snake.length; i++) {
+    if (i === 0) {
+      // Draw the snake's head (oval/rounded shape)
+      const headX = snake[i].x;
+      const headY = snake[i].y;
+
+      // Create a gradient for the head
+      const gradient = ctx.createRadialGradient(
+        headX + boxSize / 2,
+        headY + boxSize / 2,
+        boxSize / 6,
+        headX + boxSize / 2,
+        headY + boxSize / 2,
+        boxSize / 2
+      );
+      gradient.addColorStop(0, 'rgba(46, 204, 113, 1)'); // Light green center
+      gradient.addColorStop(1, 'rgba(39, 174, 96, 1)'); // Darker green edge
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.ellipse(
+        headX + boxSize / 2, // X center
+        headY + boxSize / 2, // Y center
+        boxSize / 1.2, // Horizontal radius
+        boxSize / 1.5, // Vertical radius
+        0, // Rotation
+        0,
+        Math.PI * 2 // Full circle
+      );
+      ctx.fill();
+
+      // Add eyes to the snake's head
+      ctx.fillStyle = 'white'; // White for the eyes
+      ctx.beginPath();
+      ctx.arc(headX + boxSize / 3, headY + boxSize / 3, boxSize / 8, 0, Math.PI * 2); // Left eye
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(headX + (2 * boxSize) / 3, headY + boxSize / 3, boxSize / 8, 0, Math.PI * 2); // Right eye
+      ctx.fill();
+
+      // Add pupils
+      ctx.fillStyle = 'black'; // Black pupils
+      ctx.beginPath();
+      ctx.arc(headX + boxSize / 3, headY + boxSize / 3, boxSize / 16, 0, Math.PI * 2); // Left pupil
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(headX + (2 * boxSize) / 3, headY + boxSize / 3, boxSize / 16, 0, Math.PI * 2); // Right pupil
+      ctx.fill();
+    } else {
+      // Draw the body of the snake (similar to head shape with reduced opacity)
+      const bodyX = snake[i].x;
+      const bodyY = snake[i].y;
+
+      // Create a gradient for the body
+      const gradient = ctx.createRadialGradient(
+        bodyX + boxSize / 2,
+        bodyY + boxSize / 2,
+        boxSize / 6,
+        bodyX + boxSize / 2,
+        bodyY + boxSize / 2,
+        boxSize / 2
+      );
+      gradient.addColorStop(0, 'rgba(46, 204, 113, 0.6)'); // Light green center with lower opacity
+      gradient.addColorStop(1, 'rgba(39, 174, 96, 0.6)'); // Darker green edge with lower opacity
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.ellipse(
+        bodyX + boxSize / 2, // X center
+        bodyY + boxSize / 2, // Y center
+        boxSize / 1.2, // Horizontal radius
+        boxSize / 1.5, // Vertical radius
+        0, // Rotation
+        0,
+        Math.PI * 2 // Full circle
+      );
+      ctx.fill();
+    }
+  }
+}
+
+function updateGame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawWalls(); // Draw walls
+  drawApple(); // Draw apple
+  drawSnake(); // Draw snake
+  moveSnake(); // Move the snake
+  checkCollision(); // Check for collisions
+}
+
+setInterval(updateGame, 100); // Game loop
+  </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
